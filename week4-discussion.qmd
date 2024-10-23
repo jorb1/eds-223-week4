@@ -1,0 +1,109 @@
+---
+title: "Week 4 Discussion"
+author: "BJ"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(spData)
+library(spDataLarge)
+library(sf)
+library(stars)
+library(terra)
+```
+
+```{r}
+dem <- terra::rast(system.file("raster/dem.tif", package = "spDataLarge"))
+landsat <- terra::rast(system.file("raster/landsat.tif", package = "spDataLarge"))
+srtm <- terra::rast(system.file("raster/srtm.tif", package = "spDataLarge"))
+peru <- stars::read_stars(here::here("data", "PER_elv.tif"))
+peru <- rast(peru)
+```
+
+1. Plot a histogram and boxplot of dem
+
+```{r}
+terra::hist(dem)
+```
+
+
+```{r}
+hist(dem,
+     main = "Digital Elevation Model Raster Value Distribution",
+     xlab = "Value")
+```
+
+```{r}
+terra::boxplot(dem)
+```
+
+```{r}
+boxplot(dem,
+        main = "Digital Elevation Model Raster Value Distribution",
+        ylab = "Value")
+```
+
+Reclassify dem and compute the mean for the three classes:
+- Low, where elevation is less than 300
+- Medium
+- High, where elevation is greater than 500
+
+```{r}
+# define a reclassification matrix
+rcl <- matrix(c(-Inf, 300, 0, # values -Inf to 300 = 0
+                300, 500, 1,  # values 300 to 500 = 1
+                500, Inf, 2), # values 500 to Inf = 2
+              ncol = 3, byrow = TRUE)
+
+# apply the matrix to reclassify the raster, making all cells 0 or 1 or 2
+dem_rcl <- terra::classify(dem, rcl = rcl)
+
+# assign labels to the numerical categories
+levels(dem_rcl) <- tibble::tibble(id = 0:2, 
+                                  cats = c("low", "medium", "high"))
+
+# calculate mean elevation for each category using original DEM values
+elevation_mean <- terra::zonal(dem, dem_rcl, fun = "mean")
+elevation_mean
+```
+
+```{r}
+ndwi_fun <- function(green, nir) {
+  (green - nir)/(green + nir)
+}
+
+ndvi_fun <- function(nir, red){
+  (nir - red) / (nir = red)
+}
+```
+
+```{r}
+# NDWI map
+ndwi_rast <- terra::lapp(landsat[[c(2,4)]],
+                         fun = ndwi_fun)
+plot(ndwi_rast,
+     main = "Zion National Park NDWI")
+```
+
+```{r}
+# NDVI Map
+ndvi_rast <- terra::lapp(landsat[[c(4,3)]],
+                         fun = ndvi_fun)
+```
+
+```{r}
+# Stack the raster, basically a patchwork
+combine <- c(ndvi_rast, ndwi_rast)
+
+plot(combine, main = c("NDVI", "NDWI"))
+```
+
+```{r}
+# Calculate the correlation between raster layers
+terra::layerCor(combine, fun = cor)
+```
+
